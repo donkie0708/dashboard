@@ -1,0 +1,27 @@
+#!/bin/bash
+
+echo -e "\n\e[31mAll the docker-compose created containers and volumes\e[0m will be removed."
+echo -e "The purpose of this script is just to have a clean env for trying docker-compose again."
+echo -e "\e[31mAre you sure you want to proceed? [y/N]\e[0m" 
+
+function Clean()
+{
+#  docker-compose down
+  docker-compose down --volumes
+# this will removed all the volumes depite whether they are created by docker-compose or not 
+#  docker volume rm $(docker volume ls -q)
+  # sudo chown -R 1000:1000 data-db
+}
+
+while :
+do
+  read answer
+  case $answer in
+    y|Y|yes|Yes) echo It may take a few seconds...
+    Clean 
+    break;;
+    n|N|no|No)
+    break;;
+    *) echo  Please answer yes or no;;
+  esac
+done
