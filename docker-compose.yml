@@ -1,0 +1,91 @@
+version: "3.3"
+
+volumes:
+  init-db:
+  staticdata:
+  data-db:
+
+services:
+  memory-cache:
+    image: memcached
+    restart: always
+    ports:
+      - 11211:11211
+
+  mongodb:
+    image: mongo
+    restart: always
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d
+      - ./data-db:/data/db   # comment this out if persistant storage for all the data is needed (make sure you have the right access permission)
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ds_root
+      MONGO_INITDB_ROOT_PASSWORD: mongoadmin
+      MONGO_INITDB_DATABASE: ds_dashboard_db
+    ports:
+      - 27017:27017
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    ports:
+      - 8081:8081
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ds_root
+      ME_CONFIG_MONGODB_ADMINPASSWORD: mongoadmin
+    depends_on:
+      - mongodb
+
+  postgres:
+    image: postgres
+    restart: always
+    volumes:
+      - ./data-db/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ds_apps
+      POSTGRES_PASSWORD: ds_apps
+    ports:
+      - 5432:5432
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+
+  nginx:
+    restart: always
+    image: nginx
+    ports:
+      - 8000:8000
+    volumes:
+      - ./dashboard/myproject.sock:/myproject.sock
+      - ./nginx_conf/:/etc/nginx/
+      - ./staticdata:/opt/apps/static/
+    command: bash -c "chown -R nginx:nginx myproject.sock && nginx -g 'daemon off;'"
+    depends_on:
+      - djangoapp
+
+  djangoapp:
+    build: .
+    image: ds_dashboard
+    command: bash -c "uwsgi --ini /code/dashboard/dashboard.ini"
+    restart: always
+    environment:
+      HTTP_PROXY: http://proxy.jp.sbibits.com:8080
+      HTTPS_PROXY: http://proxy.jp.sbibits.com:8080
+    volumes:
+      - .:/code      # add volume for changes regarding uwsgi
+      - ./staticdata:/static
+    expose:
+      - 8001
+    depends_on:
+      - mongodb
+      - postgres
+
+  migration:
+    image: ds_dashboard
+    command: bash -c "python3 manage.py makemigrations && python3 manage.py migrate"
+    depends_on:
+      - nginx
